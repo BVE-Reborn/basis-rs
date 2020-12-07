@@ -58,35 +58,36 @@ impl BasisTextureFormat {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TargetTextureFormat {
-    Etc1Rgb,
-    Etc2Rgba,
-    Bc1Rgb,
-    Bc3Rgba,
-    Bc4R,
-    Bc5Rg,
-    Bc7Rgba,
-    Pvrtc1Rgb,
-    Pvrtc1Rgba,
-    AstcRgba,
-    AtcRgb,
-    AtcRgbA,
-    Fxt1Rgb,
-    Pvrtc2Rgb,
-    Pvrtc2Rgba,
-    EacR11,
-    EacRg11,
-    Rgba32,
-    Rgb565,
-    Bgr565,
-    Rgba4444,
+    Etc1Rgb = 0,
+    Etc2Rgba = 1,
+    Bc1Rgb = 2,
+    Bc3Rgba = 3,
+    Bc4R = 4,
+    Bc5Rg = 5,
+    Bc7Rgba = 6,
+    Pvrtc1Rgb = 7,
+    Pvrtc1Rgba = 8,
+    AstcRgba = 9,
+    AtcRgb = 10,
+    AtcRgbA = 11,
+    Fxt1Rgb = 12,
+    Pvrtc2Rgb = 13,
+    Pvrtc2Rgba = 14,
+    EacR11 = 15,
+    EacRg11 = 16,
+    Rgba32 = 17,
+    Rgb565 = 18,
+    Bgr565 = 19,
+    Rgba4444 = 20,
 }
 impl TargetTextureFormat {
     #[allow(clippy::match_like_matches_macro)] // msrv doesn't allow this
     pub fn is_per_pixel(&self) -> bool {
         match self {
-            Self::Rgba32 => true,
+            Self::Rgb565 | Self::Bgr565 | Self::Rgba4444 | Self::Rgba32 => true,
             _ => false,
         }
     }
@@ -94,9 +95,7 @@ impl TargetTextureFormat {
     pub fn block_size(&self) -> usize {
         match self {
             Self::Etc1Rgb
-            | Self::Etc2Rgba
             | Self::Bc1Rgb
-            | Self::Bc3Rgba
             | Self::Bc4R
             | Self::Pvrtc1Rgb
             | Self::Pvrtc1Rgba
@@ -104,15 +103,15 @@ impl TargetTextureFormat {
             | Self::Pvrtc2Rgb
             | Self::Pvrtc2Rgba
             | Self::EacR11 => 8,
-            Self::Bc5Rg
+            Self::Etc2Rgba
+            | Self::Bc3Rgba
+            | Self::Bc5Rg
             | Self::Bc7Rgba
             | Self::AstcRgba
             | Self::AtcRgbA
             | Self::Fxt1Rgb
-            | Self::EacRg11
-            | Self::Rgb565
-            | Self::Bgr565
-            | Self::Rgba4444 => 16,
+            | Self::EacRg11 => 16,
+            Self::Rgb565 | Self::Bgr565 | Self::Rgba4444 => 16 * size_of::<u16>(),
             Self::Rgba32 => 16 * size_of::<u32>(),
         }
     }
@@ -595,11 +594,13 @@ impl<'a> PreparedBasisFile<'a> {
 
         let total_size = level_info.total_blocks as usize * format.block_size();
 
+        dbg!(format);
+
         let mut result: Vec<u8> = Vec::new();
-        result.resize(total_size, 0);
+        result.resize(dbg!(total_size), 0);
 
         let output_blocks_buf_size = if format.is_per_pixel() {
-            level_info.orig_width * level_info.orig_height
+            dbg!(level_info.orig_width * level_info.orig_height)
         } else {
             level_info.total_blocks
         };
@@ -622,6 +623,7 @@ impl<'a> PreparedBasisFile<'a> {
                 0,               // row count; deduced from output
             )
         };
+        dbg!("done");
 
         if res {
             Some(result)
