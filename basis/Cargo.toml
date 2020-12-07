@@ -12,3 +12,5 @@ categories = []
 
 [dependencies]
 basis-sys = { version = "0.1.0", path = "../basis-sys" }
+once_cell = "1"
+thiserror = "1"

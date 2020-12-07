@@ -273,7 +273,7 @@ extern "C" {
     // Quick header validation - no crc16 checks.
     bool basisrs_validate_header(const basisu_transcoder *me, const void *pData, uint32_t data_size);
 
-    basis_texture_type get_texture_type(const basisu_transcoder *me, const void *pData, uint32_t data_size);
+    basis_texture_type basisrs_get_texture_type(const basisu_transcoder *me, const void *pData, uint32_t data_size);
     bool basisrs_get_userdata(const basisu_transcoder *me, const void *pData, uint32_t data_size, uint32_t &userdata0,
                               uint32_t &userdata1);
 

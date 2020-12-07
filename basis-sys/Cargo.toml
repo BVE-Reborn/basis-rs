@@ -9,7 +9,7 @@ repository = "https://github.com/BVE-Reborn/basis-rs"
 license = "MIT OR Apache-2.0 OR Zlib"
 keywords = []
 categories = []
-links = "basisu"
+links = "basisrs"
 
 [build-dependencies]
 cc = { version = "1", features = ["parallel"] }

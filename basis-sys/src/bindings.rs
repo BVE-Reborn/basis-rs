@@ -895,6 +895,13 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
+    pub fn basisrs_get_texture_type(
+        me: *const basisu_transcoder,
+        pData: *const ::std::os::raw::c_void,
+        data_size: u32,
+    ) -> basis_texture_type;
+}
+extern "C" {
     pub fn basisrs_get_userdata(
         me: *const basisu_transcoder,
         pData: *const ::std::os::raw::c_void,
