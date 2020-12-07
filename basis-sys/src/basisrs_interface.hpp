@@ -247,6 +247,8 @@ using namespace basist;
 #endif
 
 extern "C" {
+    void basisrs_init();
+    void basisrs_deinit();
 
     struct basisrs_vector_u32 {
         const uint32_t *values;
@@ -323,7 +325,7 @@ extern "C" {
     // - This method assumes the output texture buffer is readable. In some cases to handle alpha, the transcoder will write temporary data to the output texture in
     // a first pass, which will be read in a second pass.
     bool basisrs_transcode_image_level(
-            const void *pData, uint32_t data_size,
+            const basisu_transcoder *me, const void *pData, uint32_t data_size,
             uint32_t image_index, uint32_t level_index,
             void *pOutput_blocks, uint32_t output_blocks_buf_size_in_blocks_or_pixels,
             transcoder_texture_format fmt,
@@ -332,7 +334,7 @@ extern "C" {
 
     // Finds the basis slice corresponding to the specified image/level/alpha params, or -1 if the slice can't be found.
     int
-    basisrs_find_slice(const void *pData, uint32_t data_size, uint32_t image_index, uint32_t level_index, bool alpha_data);
+    basisrs_find_slice(const basisu_transcoder *me, const void *pData, uint32_t data_size, uint32_t image_index, uint32_t level_index, bool alpha_data);
 
     // transcode_slice() decodes a single slice from the .basis file. It's a low-level API - most likely you want to use transcode_image_level().
     // This is a low-level API, and will be needed to be called multiple times to decode some texture formats (like BC3, BC5, or ETC2).
@@ -343,7 +345,7 @@ extern "C" {
     // output_rows_in_pixels: Ignored unless fmt is cRGBA32. The total number of output rows in the output buffer. If 0, the transcoder assumes the slice's orig_height (NOT num_blocks_y * 4).
     // Notes:
     // - basisu_transcoder_init() must have been called first to initialize the transcoder lookup tables before calling this function.
-    bool basisrs_transcode_slice(const void *pData, uint32_t data_size, uint32_t slice_index,
+    bool basisrs_transcode_slice(const basisu_transcoder *me, const void *pData, uint32_t data_size, uint32_t slice_index,
                                  void *pOutput_blocks, uint32_t output_blocks_buf_size_in_blocks_or_pixels,
                                  block_format fmt, uint32_t output_block_stride_in_bytes, uint32_t decode_flags = 0,
                                  uint32_t output_row_pitch_in_blocks_or_pixels = 0,
