@@ -1,0 +1,1 @@
+bindgen .\src\basisrs_interface.hpp --whitelist-function 'basisrs.*' --whitelist-type 'basisrs.*' --whitelist-type 'basisu.*' --whitelist-var 'basisu.*' --blacklist-type 'std.*'  --blacklist-function 'std.*' --blacklist-item 'std.*' --opaque-type 'std::vector' -o src/bindings.rs
