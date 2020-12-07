@@ -8,8 +8,6 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-pub mod error;
-
 static GLOBAL_STATE: Lazy<()> = Lazy::new(|| unsafe { sys::basisrs_init() });
 
 /// Initialize global state that needs to be initialized.
@@ -298,8 +296,7 @@ pub struct FileInfo {
     pub slice_info: Vec<SliceInfo>,
     pub total_images: u32,
     pub image_mipmap_levels: Vec<u32>,
-    pub userdata0: u32,
-    pub userdata1: u32,
+    pub userdata: UserData,
     pub tex_format: BasisTextureFormat,
     pub y_flipped: bool,
     pub etc1s: bool,
@@ -323,8 +320,10 @@ impl FileInfo {
             slice_info: read_slice_info(slice_info),
             total_images: value.m_total_images,
             image_mipmap_levels: read_mipmap_levels(mipmap_levels),
-            userdata0: value.m_userdata0,
-            userdata1: value.m_userdata1,
+            userdata: UserData {
+                word0: value.m_userdata0,
+                word1: value.m_userdata1,
+            },
             tex_format: BasisTextureFormat::from_internal(value.m_tex_format),
             y_flipped: value.m_y_flipped,
             etc1s: value.m_etc1s,
@@ -347,35 +346,28 @@ impl Transcoder {
         }
     }
 
-    pub fn validate_file_checksums(&self, file: &[u8], full_validation: bool) -> Result<bool, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn validate_file_checksums(&self, file: &[u8], full_validation: bool) -> bool {
+        let length = validate_slice_length(file);
 
-        let res =
-            unsafe { sys::basisrs_validate_file_checksums(self.inner, file.as_ptr() as _, length, full_validation) };
-
-        Ok(res)
+        unsafe { sys::basisrs_validate_file_checksums(self.inner, file.as_ptr() as _, length, full_validation) }
     }
 
-    pub fn validate_header(&self, file: &[u8]) -> Result<bool, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn validate_header(&self, file: &[u8]) -> bool {
+        let length = validate_slice_length(file);
 
-        let res = unsafe { sys::basisrs_validate_header(self.inner, file.as_ptr() as _, length) };
-
-        Ok(res)
+        unsafe { sys::basisrs_validate_header(self.inner, file.as_ptr() as _, length) }
     }
 
-    pub fn get_texture_type(&self, file: &[u8]) -> Result<TextureType, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_texture_type(&self, file: &[u8]) -> TextureType {
+        let length = validate_slice_length(file);
 
         let res = unsafe { sys::basisrs_get_texture_type(self.inner, file.as_ptr() as _, length) };
 
-        let ty = TextureType::from_internal(res);
-
-        Ok(ty)
+        TextureType::from_internal(res)
     }
 
-    pub fn get_userdata(&self, file: &[u8]) -> Result<Option<UserData>, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_userdata(&self, file: &[u8]) -> Option<UserData> {
+        let length = validate_slice_length(file);
 
         let mut data = UserData { word0: 0, word1: 0 };
 
@@ -390,36 +382,32 @@ impl Transcoder {
         };
 
         if res {
-            Ok(Some(data))
+            Some(data)
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn get_total_images(&self, file: &[u8]) -> Result<NonZeroU32, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_total_images(&self, file: &[u8]) -> NonZeroU32 {
+        let length = validate_slice_length(file);
 
         let res = unsafe { sys::basisrs_get_total_images(self.inner, file.as_ptr() as _, length) };
 
-        Ok(NonZeroU32::new(res).expect("documentation asserts that get_total_images will return non-zero number"))
+        NonZeroU32::new(res).expect("documentation asserts that get_total_images will return non-zero number")
     }
 
-    pub fn get_tex_format(&self, file: &[u8]) -> Result<BasisTextureFormat, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_tex_format(&self, file: &[u8]) -> BasisTextureFormat {
+        let length = validate_slice_length(file);
 
         let res = unsafe { sys::basisrs_get_tex_format(self.inner, file.as_ptr() as _, length) };
 
-        let ty = BasisTextureFormat::from_internal(res);
-
-        Ok(ty)
+        BasisTextureFormat::from_internal(res)
     }
 
-    pub fn get_total_image_levels(&self, file: &[u8], image_index: u32) -> Result<u32, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_total_image_levels(&self, file: &[u8], image_index: u32) -> u32 {
+        let length = validate_slice_length(file);
 
-        let res = unsafe { sys::basisrs_get_total_image_levels(self.inner, file.as_ptr() as _, length, image_index) };
-
-        Ok(res)
+        unsafe { sys::basisrs_get_total_image_levels(self.inner, file.as_ptr() as _, length, image_index) }
     }
 
     pub fn get_basic_image_level_info(
@@ -427,8 +415,8 @@ impl Transcoder {
         file: &[u8],
         image_index: u32,
         level_index: u32,
-    ) -> Result<Option<BasicImageLevelInfo>, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    ) -> Option<BasicImageLevelInfo> {
+        let length = validate_slice_length(file);
 
         let mut data = BasicImageLevelInfo {
             orig_width: 0,
@@ -450,14 +438,14 @@ impl Transcoder {
         };
 
         if res {
-            Ok(Some(data))
+            Some(data)
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn get_image_info(&self, file: &[u8], image_index: u32) -> Result<Option<ImageInfo>, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_image_info(&self, file: &[u8], image_index: u32) -> Option<ImageInfo> {
+        let length = validate_slice_length(file);
 
         let mut data = sys::basisu_image_info {
             m_image_index: 0,
@@ -479,19 +467,14 @@ impl Transcoder {
         };
 
         if res {
-            Ok(Some(ImageInfo::from_internal(data)))
+            Some(ImageInfo::from_internal(data))
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn get_image_level_info(
-        &self,
-        file: &[u8],
-        image_index: u32,
-        level_index: u32,
-    ) -> Result<Option<ImageLevelInfo>, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_image_level_info(&self, file: &[u8], image_index: u32, level_index: u32) -> Option<ImageLevelInfo> {
+        let length = validate_slice_length(file);
 
         let mut data = sys::basisu_image_level_info {
             m_image_index: 0,
@@ -520,14 +503,14 @@ impl Transcoder {
         };
 
         if res {
-            Ok(Some(ImageLevelInfo::from_internal(data)))
+            Some(ImageLevelInfo::from_internal(data))
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn get_file_info(&self, file: &[u8]) -> Result<Option<FileInfo>, error::ExecutionError> {
-        let length = validate_slice_length(file)?;
+    pub fn get_file_info(&self, file: &[u8]) -> Option<FileInfo> {
+        let length = validate_slice_length(file);
 
         let mut data = sys::basisu_file_info {
             m_version: 0,
@@ -554,31 +537,28 @@ impl Transcoder {
         let res = unsafe { sys::basisrs_get_file_info(self.inner, file.as_ptr() as _, length, &mut data as *mut _) };
 
         if res {
-            Ok(Some(FileInfo::from_internal(data)))
+            Some(FileInfo::from_internal(data))
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn start_transcoding<'a>(
-        &'a self,
-        file: &'a [u8],
-    ) -> Result<Option<PreparedBasisFile<'a>>, error::ExecutionError> {
+    pub fn prepare_transcoding<'a>(&'a self, file: &'a [u8]) -> Option<PreparedBasisFile<'a>> {
         init();
 
         let locked = self.recording.swap(true, Ordering::Acquire);
 
         if locked {
-            return Ok(None);
+            return None;
         }
 
-        let length = validate_slice_length(file)?;
+        let length = validate_slice_length(file);
 
         let res = unsafe { sys::basisrs_start_transcoding(self.inner, file.as_ptr() as _, length) };
 
         assert!(res, "transcoding started while transcoding still in progress");
 
-        Ok(Some(PreparedBasisFile { transcoder: self, file }))
+        Some(PreparedBasisFile { transcoder: self, file })
     }
 }
 
@@ -610,8 +590,8 @@ impl<'a> PreparedBasisFile<'a> {
     ) -> Option<Vec<u8>> {
         let level_info = self
             .transcoder
-            .get_image_level_info(&self.file, image_index, level_index)
-            .unwrap()?;
+            .get_basic_image_level_info(&self.file, image_index, level_index)
+            .unwrap();
 
         let total_size = level_info.total_blocks as usize * format.block_size();
 
@@ -660,9 +640,6 @@ impl<'a> Drop for PreparedBasisFile<'a> {
     }
 }
 
-fn validate_slice_length<T>(slice: &[T]) -> Result<u32, error::ExecutionError> {
-    slice
-        .len()
-        .try_into()
-        .map_err(|_| error::ExecutionError::FileTooLong(slice.len()))
+fn validate_slice_length<T>(slice: &[T]) -> u32 {
+    slice.len().try_into().expect("Slice is longer than u32::MAX")
 }
