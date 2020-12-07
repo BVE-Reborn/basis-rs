@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 pub mod error;
 
-const GLOBAL_STATE: Lazy<()> = Lazy::new(|| unsafe { sys::basisrs_init() });
+static GLOBAL_STATE: Lazy<()> = Lazy::new(|| unsafe { sys::basisrs_init() });
 
 /// Initialize global state that needs to be initialized.
 ///
