@@ -85,6 +85,7 @@ pub enum TargetTextureFormat {
     Rgba4444,
 }
 impl TargetTextureFormat {
+    #[allow(clippy::match_like_matches_macro)] // msrv doesn't allow this
     pub fn is_per_pixel(&self) -> bool {
         match self {
             Self::Rgba32 => true,
@@ -589,6 +590,12 @@ impl Drop for Transcoder {
 
 unsafe impl Send for Transcoder {}
 unsafe impl Sync for Transcoder {}
+
+impl Default for Transcoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub struct PreparedBasisFile<'a> {
     transcoder: &'a Transcoder,
