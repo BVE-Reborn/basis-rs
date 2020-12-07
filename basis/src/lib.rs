@@ -1,7 +1,12 @@
 use basis_sys as sys;
 use once_cell::sync::Lazy;
-use std::convert::TryInto;
-use std::num::NonZeroU32;
+use std::{
+    convert::TryInto,
+    mem::size_of,
+    num::NonZeroU32,
+    ptr,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 pub mod error;
 
@@ -80,30 +85,62 @@ pub enum TargetTextureFormat {
     Rgba4444,
 }
 impl TargetTextureFormat {
-    fn from_internal(value: sys::transcoder_texture_format) -> Self {
-        match value {
-            sys::transcoder_texture_format_cTFETC1_RGB => Self::Etc1Rgb,
-            sys::transcoder_texture_format_cTFETC2_RGBA => Self::Etc2Rgba,
-            sys::transcoder_texture_format_cTFBC1_RGB => Self::Bc1Rgb,
-            sys::transcoder_texture_format_cTFBC3_RGBA => Self::Bc3Rgba,
-            sys::transcoder_texture_format_cTFBC4_R => Self::Bc4R,
-            sys::transcoder_texture_format_cTFBC5_RG => Self::Bc5Rg,
-            sys::transcoder_texture_format_cTFBC7_RGBA => Self::Bc7Rgba,
-            sys::transcoder_texture_format_cTFPVRTC1_4_RGB => Self::Pvrtc1Rgb,
-            sys::transcoder_texture_format_cTFPVRTC1_4_RGBA => Self::Pvrtc1Rgba,
-            sys::transcoder_texture_format_cTFASTC_4x4 => Self::AstcRgba,
-            sys::transcoder_texture_format_cTFATC_RGB => Self::AtcRgb,
-            sys::transcoder_texture_format_cTFATC_RGBA => Self::AtcRgbA,
-            sys::transcoder_texture_format_cTFFXT1_RGB => Self::Fxt1Rgb,
-            sys::transcoder_texture_format_cTFPVRTC2_4_RGB => Self::Pvrtc2Rgb,
-            sys::transcoder_texture_format_cTFPVRTC2_4_RGBA => Self::Pvrtc2Rgba,
-            sys::transcoder_texture_format_cTFETC2_EAC_R11 => Self::EacR11,
-            sys::transcoder_texture_format_cTFETC2_EAC_RG11 => Self::EacRg11,
-            sys::transcoder_texture_format_cTFRGBA32 => Self::Rgba32,
-            sys::transcoder_texture_format_cTFRGB565 => Self::Rgb565,
-            sys::transcoder_texture_format_cTFBGR565 => Self::Bgr565,
-            sys::transcoder_texture_format_cTFRGBA4444 => Self::Rgba4444,
-            _ => unreachable!("invalid internal texture format"),
+    pub fn is_per_pixel(&self) -> bool {
+        match self {
+            Self::Rgba32 => true,
+            _ => false,
+        }
+    }
+
+    pub fn block_size(&self) -> usize {
+        match self {
+            Self::Etc1Rgb
+            | Self::Etc2Rgba
+            | Self::Bc1Rgb
+            | Self::Bc3Rgba
+            | Self::Bc4R
+            | Self::Pvrtc1Rgb
+            | Self::Pvrtc1Rgba
+            | Self::AtcRgb
+            | Self::Pvrtc2Rgb
+            | Self::Pvrtc2Rgba
+            | Self::EacR11 => 8,
+            Self::Bc5Rg
+            | Self::Bc7Rgba
+            | Self::AstcRgba
+            | Self::AtcRgbA
+            | Self::Fxt1Rgb
+            | Self::EacRg11
+            | Self::Rgb565
+            | Self::Bgr565
+            | Self::Rgba4444 => 16,
+            Self::Rgba32 => 16 * size_of::<u32>(),
+        }
+    }
+
+    fn as_internal(&self) -> sys::transcoder_texture_format {
+        match self {
+            Self::Etc1Rgb => sys::transcoder_texture_format_cTFETC1_RGB,
+            Self::Etc2Rgba => sys::transcoder_texture_format_cTFETC2_RGBA,
+            Self::Bc1Rgb => sys::transcoder_texture_format_cTFBC1_RGB,
+            Self::Bc3Rgba => sys::transcoder_texture_format_cTFBC3_RGBA,
+            Self::Bc4R => sys::transcoder_texture_format_cTFBC4_R,
+            Self::Bc5Rg => sys::transcoder_texture_format_cTFBC5_RG,
+            Self::Bc7Rgba => sys::transcoder_texture_format_cTFBC7_RGBA,
+            Self::Pvrtc1Rgb => sys::transcoder_texture_format_cTFPVRTC1_4_RGB,
+            Self::Pvrtc1Rgba => sys::transcoder_texture_format_cTFPVRTC1_4_RGBA,
+            Self::AstcRgba => sys::transcoder_texture_format_cTFASTC_4x4,
+            Self::AtcRgb => sys::transcoder_texture_format_cTFATC_RGB,
+            Self::AtcRgbA => sys::transcoder_texture_format_cTFATC_RGBA,
+            Self::Fxt1Rgb => sys::transcoder_texture_format_cTFFXT1_RGB,
+            Self::Pvrtc2Rgb => sys::transcoder_texture_format_cTFPVRTC2_4_RGB,
+            Self::Pvrtc2Rgba => sys::transcoder_texture_format_cTFPVRTC2_4_RGBA,
+            Self::EacR11 => sys::transcoder_texture_format_cTFETC2_EAC_R11,
+            Self::EacRg11 => sys::transcoder_texture_format_cTFETC2_EAC_RG11,
+            Self::Rgba32 => sys::transcoder_texture_format_cTFRGBA32,
+            Self::Rgb565 => sys::transcoder_texture_format_cTFRGB565,
+            Self::Bgr565 => sys::transcoder_texture_format_cTFBGR565,
+            Self::Rgba4444 => sys::transcoder_texture_format_cTFRGBA4444,
         }
     }
 }
@@ -297,12 +334,16 @@ impl FileInfo {
 
 pub struct Transcoder {
     inner: *mut sys::basisu_transcoder,
+    recording: AtomicBool,
 }
 impl Transcoder {
     pub fn new() -> Self {
         let inner = unsafe { sys::basisrs_create_transcoder() };
 
-        Self { inner }
+        Self {
+            inner,
+            recording: AtomicBool::new(false),
+        }
     }
 
     pub fn validate_file_checksums(&self, file: &[u8], full_validation: bool) -> Result<bool, error::ExecutionError> {
@@ -483,11 +524,132 @@ impl Transcoder {
             Ok(None)
         }
     }
+
+    pub fn get_file_info(&self, file: &[u8]) -> Result<Option<FileInfo>, error::ExecutionError> {
+        let length = validate_slice_length(file)?;
+
+        let mut data = sys::basisu_file_info {
+            m_version: 0,
+            m_total_header_size: 0,
+            m_total_selectors: 0,
+            m_selector_codebook_size: 0,
+            m_total_endpoints: 0,
+            m_endpoint_codebook_size: 0,
+            m_tables_size: 0,
+            m_slices_size: 0,
+            m_tex_type: 0,
+            m_us_per_frame: 0,
+            m_slice_info: [0; 3],
+            m_total_images: 0,
+            m_image_mipmap_levels: [0; 3],
+            m_userdata0: 0,
+            m_userdata1: 0,
+            m_tex_format: 0,
+            m_y_flipped: false,
+            m_etc1s: false,
+            m_has_alpha_slices: false,
+        };
+
+        let res = unsafe { sys::basisrs_get_file_info(self.inner, file.as_ptr() as _, length, &mut data as *mut _) };
+
+        if res {
+            Ok(Some(FileInfo::from_internal(data)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn start_transcoding<'a>(
+        &'a self,
+        file: &'a [u8],
+    ) -> Result<Option<PreparedBasisFile<'a>>, error::ExecutionError> {
+        init();
+
+        let locked = self.recording.swap(true, Ordering::Acquire);
+
+        if locked {
+            return Ok(None);
+        }
+
+        let length = validate_slice_length(file)?;
+
+        let res = unsafe { sys::basisrs_start_transcoding(self.inner, file.as_ptr() as _, length) };
+
+        assert!(res, "transcoding started while transcoding still in progress");
+
+        Ok(Some(PreparedBasisFile { transcoder: self, file }))
+    }
 }
 
 impl Drop for Transcoder {
     fn drop(&mut self) {
         unsafe { sys::basisrs_destroy_transcoder(self.inner) }
+    }
+}
+
+unsafe impl Send for Transcoder {}
+unsafe impl Sync for Transcoder {}
+
+pub struct PreparedBasisFile<'a> {
+    transcoder: &'a Transcoder,
+    file: &'a [u8],
+}
+impl<'a> PreparedBasisFile<'a> {
+    pub fn transcode_image_level(
+        &mut self,
+        image_index: u32,
+        level_index: u32,
+        format: TargetTextureFormat,
+    ) -> Option<Vec<u8>> {
+        let level_info = self
+            .transcoder
+            .get_image_level_info(&self.file, image_index, level_index)
+            .unwrap()?;
+
+        let total_size = level_info.total_blocks as usize * format.block_size();
+
+        let mut result: Vec<u8> = Vec::new();
+        result.resize(total_size, 0);
+
+        let output_blocks_buf_size = if format.is_per_pixel() {
+            level_info.orig_width * level_info.orig_height
+        } else {
+            level_info.total_blocks
+        };
+
+        let texture_format = format.as_internal();
+
+        let res = unsafe {
+            sys::basisrs_transcode_image_level(
+                self.transcoder.inner,
+                self.file.as_ptr() as _,
+                self.file.len() as _,
+                image_index,
+                level_index,
+                result.as_mut_ptr() as *mut _,
+                output_blocks_buf_size,
+                texture_format,
+                0,               // decode flags
+                0,               // row pitch; deduced from output
+                ptr::null_mut(), // transcoder state
+                0,               // row count; deduced from output
+            )
+        };
+
+        if res {
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+impl<'a> Drop for PreparedBasisFile<'a> {
+    fn drop(&mut self) {
+        let res = unsafe { sys::basisrs_stop_transcoding(self.transcoder.inner) };
+
+        assert!(res, "transcoding stopped while not started");
+
+        self.transcoder.recording.store(false, Ordering::Release);
     }
 }
 
