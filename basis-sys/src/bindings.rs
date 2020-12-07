@@ -783,6 +783,12 @@ fn bindgen_test_layout_basisu_file_info() {
         )
     );
 }
+extern "C" {
+    pub fn basisrs_init();
+}
+extern "C" {
+    pub fn basisrs_deinit();
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct basisrs_vector_u32 {
@@ -973,6 +979,7 @@ extern "C" {
 }
 extern "C" {
     pub fn basisrs_transcode_image_level(
+        me: *const basisu_transcoder,
         pData: *const ::std::os::raw::c_void,
         data_size: u32,
         image_index: u32,
@@ -988,6 +995,7 @@ extern "C" {
 }
 extern "C" {
     pub fn basisrs_find_slice(
+        me: *const basisu_transcoder,
         pData: *const ::std::os::raw::c_void,
         data_size: u32,
         image_index: u32,
@@ -997,6 +1005,7 @@ extern "C" {
 }
 extern "C" {
     pub fn basisrs_transcode_slice(
+        me: *const basisu_transcoder,
         pData: *const ::std::os::raw::c_void,
         data_size: u32,
         slice_index: u32,
