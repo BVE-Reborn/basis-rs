@@ -58,6 +58,7 @@ impl BasisTextureFormat {
         }
     }
 
+    #[allow(clippy::match_like_matches_macro)] // msrv doesn't allow this
     pub fn supports_texture_format(&self, format: TargetTextureFormat) -> bool {
         match (self, format) {
             (BasisTextureFormat::UAstc, TargetTextureFormat::AtcRgb)
