@@ -1,4 +1,5 @@
 /.idea
 /.vs
 /target
+/basis/target
 # Cargo.lock

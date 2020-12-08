@@ -10,9 +10,14 @@ license = "MIT OR Apache-2.0 OR Zlib"
 keywords = []
 categories = []
 
+[[bench]]
+name = "transcode"
+harness = false
+
 [dependencies]
 basis-sys = { version = "0.1.0", path = "../basis-sys" }
 once_cell = "1"
 
 [dev-dependencies]
+criterion = "0.3"
 ddsfile = "0.4"

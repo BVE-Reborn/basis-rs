@@ -2,6 +2,7 @@ use basis_sys as sys;
 use once_cell::sync::Lazy;
 use std::{
     convert::TryInto,
+    fmt,
     mem::size_of,
     num::NonZeroU32,
     ptr,
@@ -56,6 +57,18 @@ impl BasisTextureFormat {
             _ => unreachable!("invalid internal basis texture format"),
         }
     }
+
+    pub fn supports_texture_format(&self, format: TargetTextureFormat) -> bool {
+        match (self, format) {
+            (BasisTextureFormat::UAstc, TargetTextureFormat::AtcRgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::AtcRgbA)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Fxt1Rgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Pvrtc2Rgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Pvrtc2Rgba)
+            | (_, TargetTextureFormat::Rgba4444) => false,
+            _ => true,
+        }
+    }
 }
 
 #[repr(u8)]
@@ -85,7 +98,7 @@ pub enum TargetTextureFormat {
 }
 impl TargetTextureFormat {
     #[allow(clippy::match_like_matches_macro)] // msrv doesn't allow this
-    pub fn is_per_pixel(&self) -> bool {
+    pub fn is_uncompressed(&self) -> bool {
         match self {
             Self::Rgb565 | Self::Bgr565 | Self::Rgba4444 | Self::Rgba32 => true,
             _ => false,
@@ -296,7 +309,7 @@ pub struct FileInfo {
     pub total_images: u32,
     pub image_mipmap_levels: Vec<u32>,
     pub userdata: UserData,
-    pub tex_format: BasisTextureFormat,
+    pub basis_format: BasisTextureFormat,
     pub y_flipped: bool,
     pub etc1s: bool,
     pub has_alpha_slices: bool,
@@ -323,7 +336,7 @@ impl FileInfo {
                 word0: value.m_userdata0,
                 word1: value.m_userdata1,
             },
-            tex_format: BasisTextureFormat::from_internal(value.m_tex_format),
+            basis_format: BasisTextureFormat::from_internal(value.m_tex_format),
             y_flipped: value.m_y_flipped,
             etc1s: value.m_etc1s,
             has_alpha_slices: value.m_has_alpha_slices,
@@ -586,7 +599,21 @@ impl<'a> PreparedBasisFile<'a> {
         image_index: u32,
         level_index: u32,
         format: TargetTextureFormat,
-    ) -> Option<Vec<u8>> {
+    ) -> Result<Vec<u8>, TranscodeError> {
+        let file_info = self.transcoder.get_file_info(&self.file).unwrap().basis_format;
+
+        match (file_info, format) {
+            (BasisTextureFormat::UAstc, TargetTextureFormat::AtcRgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::AtcRgbA)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Fxt1Rgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Pvrtc2Rgb)
+            | (BasisTextureFormat::UAstc, TargetTextureFormat::Pvrtc2Rgba) => {
+                return Err(TranscodeError::UnsupportedFormatFromUastc(format))
+            }
+            (_, TargetTextureFormat::Rgba4444) => return Err(TranscodeError::UnsupportedFormatBug),
+            _ => {}
+        }
+
         let level_info = self
             .transcoder
             .get_basic_image_level_info(&self.file, image_index, level_index)
@@ -594,13 +621,11 @@ impl<'a> PreparedBasisFile<'a> {
 
         let total_size = level_info.total_blocks as usize * format.block_size();
 
-        dbg!(format);
-
         let mut result: Vec<u8> = Vec::new();
-        result.resize(dbg!(total_size), 0);
+        result.resize(total_size, 0);
 
-        let output_blocks_buf_size = if format.is_per_pixel() {
-            dbg!(level_info.orig_width * level_info.orig_height)
+        let output_blocks_buf_size = if format.is_uncompressed() {
+            level_info.orig_width * level_info.orig_height
         } else {
             level_info.total_blocks
         };
@@ -623,12 +648,11 @@ impl<'a> PreparedBasisFile<'a> {
                 0,               // row count; deduced from output
             )
         };
-        dbg!("done");
 
         if res {
-            Some(result)
+            Ok(result)
         } else {
-            None
+            Err(TranscodeError::OtherError)
         }
     }
 }
@@ -641,6 +665,31 @@ impl<'a> Drop for PreparedBasisFile<'a> {
         self.transcoder.recording.store(false, Ordering::Release);
     }
 }
+
+#[derive(Debug)]
+pub enum TranscodeError {
+    UnsupportedFormatFromUastc(TargetTextureFormat),
+    UnsupportedFormatBug,
+    OtherError,
+}
+
+impl fmt::Display for TranscodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TranscodeError::UnsupportedFormatFromUastc(format) => {
+                write!(f, "Format {:?} cannot be converted from uastc basis format", format)
+            }
+            TranscodeError::UnsupportedFormatBug => write!(
+                f,
+                "Format {:?} cannot be written to because of a bug",
+                TargetTextureFormat::Rgba4444
+            ),
+            TranscodeError::OtherError => write!(f, "Another error has occurred. If in debug mode, check stderr"),
+        }
+    }
+}
+
+impl std::error::Error for TranscodeError {}
 
 fn validate_slice_length<T>(slice: &[T]) -> u32 {
     slice.len().try_into().expect("Slice is longer than u32::MAX")
