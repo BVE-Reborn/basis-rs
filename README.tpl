@@ -1,9 +1,9 @@
 # {{crate}}
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/BVE-Reborn/crate-name/CI)
-[![Crates.io](https://img.shields.io/crates/v/crate-name)](https://crates.io/crates/crate-name)
-[![Documentation](https://docs.rs/crate-name/badge.svg)](https://docs.rs/crate-name)
-![License](https://img.shields.io/crates/l/crate-name)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/BVE-Reborn/basis-rs/CI)
+[![Crates.io](https://img.shields.io/crates/v/basisu)](https://crates.io/crates/basisu)
+[![Documentation](https://docs.rs/basisu/badge.svg)](https://docs.rs/basisu)
+![License](https://img.shields.io/crates/l/basisu)
 
 {{readme}}
 
